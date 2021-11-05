@@ -16,16 +16,80 @@ import seaborn as sns
 import json
 import matplotlib.pyplot as plt
 
-def parse_args():
-    parser=argparse.ArgumentParser()
-    parser.add_argument('--checkpoint',action='store',default='/home/workspace/ImageClassifier ')
-    parser.add_argument('--filepath',dest='filepath',default='flowers/test/1/image_06764.jpg')
-    parser.add_argument('--top_k',dest=top_k, default=3)
-    parser.add_argument('--category_names',dest='category_names',default='cat_to_name.json')
-    parser.add_argument('--gpu',action='store',default='gpu')
+#initialize variables with default values
+arch=''
+#------------------------------------------------
+parser=argparse.ArgumentParser()
+parser.add_argument('--checkpoint',action='store',default='chcekpoint.pth')
+parser.add_argument('--image_path',action='store', type=str,default='flowers/test/1/image_06764.jpg')
+parser.add_argument('--top_k',action='store',type=int, default=3)
+parser.add_argument('--category_names',action='store',type=str,default='cat_to_name.json')
+parser.add_argument('--gpu',action='store_true',help='use gpu if available')
+args = parser.parse_args()
+#------------------------------------------------
+#select parameters from command line
+if args.checkpoint:
+    checkpoint=args.checkpoint
     
+if args.image_path:
+    filepath= args.image_path
+    
+if args.top_k:
+    top_k=args.top_k
+    
+if args.category_names:
+    filepath=args.category_names
+    
+if args.gpu: 
+    device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+#------------------------------------------------
+with open('cat_to_name.json', 'r') as f:
+    cat_to_name = json.load(f)
+    
+def load_model(checkpoint_path):
+    
+    checkpoint = torch.load(checkpoint_path)
+    
+    #check which model the user chose
+    if checkpoint['arch']=='vgg19':
+        model.models.vgg19(pretrained=True)
+        in_features=25088
+        for param in model.parameters():
+            para.requires_grad=False
+    elif checkpoint['arch']=='alexnet': 
+        model.models.alexnet(pretrained=True)
+        in_features=9216
+        for param in model.parameters():
+            para.requires_grad=False
+    elif checkpoint['arch']=='densenet121': 
+        model.models.densenet121(pretrained=True)
+        in_features=1024
+        for param in model.parameters():
+            para.requires_grad=False
+            
+    else:
+        print("sorry archeticture not recognized")
+        
+    model.class_to_idx = checkpoint['class_to_idx']        
+    hidden_units=checkpoint['hidden_units']
+    
+    
+    classifier= nn.Sequential(OrderedDict([
+                                ('fc1',nn.Linear(in_features,hidden_units)),
+                                 ('relu',nn.ReLU()),
+                                  ('drop', nn.Dropout(0.2)),
+                                  ('fc2',nn.Linear(1024,102)),
+                                   ('output',nn.LogSoftmax(dim=1))
+                                ]))
+    model.classifier=classifier
+    model.load_state_dict(checkpoint['state_dict'])
+        
+    return model
+
+#------------------------------------------------
 def process_img(image):
-    ''''''
+    '''
+    '''
     if image.width>image.height:
         image.thumbnail((10000000,256))
     else:
@@ -47,17 +111,7 @@ def process_img(image):
     #convert to tensor and return 
     return torch.tensor(image)
 
-def rebuild_model(filepath):
-    
-    checkpoint = torch.load('/home/workspace/ImageClassifier/checkpoint.pth', map_location=lambda storage, loc:storage)
-    model=getattr(models, checkpoint['name'])(pretraind=True)
-    model.classifier=checkpoint['classifier']
-    model.load_state_dict(checkpoint['state_dict'])
-    model.class_to_idx=checkpoint['class_to_idx']
-    return model
-   #invoke, send checkpoint path                       
-rebuild_model('/home/workspace/ImageClassifier/checkpoint.pth')                       
-print(model)
+
 
 def predict(image_path, model, top_k=5):
   
@@ -90,24 +144,12 @@ def predict(image_path, model, top_k=5):
     top_flowers = [cat_to_name[lab] for lab in top_labels]
     
     return top_probs, top_labels, top_flowers                     
-def main():
-   args= parse_args()
-   gpu=args.gpu
-   model= rebuild_model(args.checkpoint)
-   cat_to_name=load_cat_names(args.category_names)
-   img_path=args.filepath
-   probs, classes=predict(img_path, model, int(args.top_k))
-   labels=[cat_to_name[str(index)] for index in classes] 
-   probability=probs
-   print('File to be selected is: ' + image_path)
-   print(labels)
-   print(probability)
-   n=0 
-   while n < len(labels):
-        print("{} with a probability of {}".format(labels[n], probability[n]))
-        n += 1 # cycle through
+#------------------------------------------------
+load_checkpoint(checkpoint)
+print('the model being used for prediction is: ')
+print(model)
+labels= predict(filepath,model,topk)
+print('-' * 10)
+print(labels)
+print('-' * 10)
 
-if __name__ == "__main__":
-    main()                      
-                          
-    
